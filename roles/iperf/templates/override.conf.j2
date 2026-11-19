@@ -1,0 +1,23 @@
+{{ ansible_managed | comment }}
+[Service]
+ExecStart=
+ExecStart=/usr/bin/iperf3 --server --interval 0 --port {{ iperf_port }}{{ (' --bind ' ~ iperf_bind_address) if iperf_bind_address else '' }}{{ ([''] + iperf_extra_args) | join(' ') }}
+
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native

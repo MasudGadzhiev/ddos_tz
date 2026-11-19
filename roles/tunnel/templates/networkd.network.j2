@@ -1,0 +1,9 @@
+{{ ansible_managed | comment }}
+[Match]
+Name={{ tunnel_name }}
+
+[Network]
+Address={{ tunnel_address }}
+ConfigureWithoutCarrier=yes
+LinkLocalAddressing=no
+IPv6AcceptRA=no

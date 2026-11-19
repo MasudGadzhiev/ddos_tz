@@ -1,0 +1,8 @@
+{{ ansible_managed | comment }}
+{% set args = ['--web.listen-address=' ~ node_exporter_listen_ip ~ ':' ~ node_exporter_port,
+               '--collector.netdev.device-exclude=' ~ node_exporter_netdev_device_exclude,
+               '--collector.textfile.directory=' ~ node_exporter_textfile_directory]
+            + (node_exporter_collectors_enabled | map('regex_replace', '^', '--collector.') | list)
+            + (node_exporter_collectors_disabled | map('regex_replace', '^', '--no-collector.') | list)
+            + node_exporter_extra_args %}
+ARGS="{{ args | join(' ') }}"

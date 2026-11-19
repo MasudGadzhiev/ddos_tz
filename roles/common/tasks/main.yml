@@ -1,0 +1,80 @@
+---
+- name: Assert supported operating system
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Debian'
+      - ansible_facts['distribution_major_version'] == '13'
+    fail_msg: >-
+      Debian 13 (trixie) is required, found {{ ansible_facts['distribution'] }}
+      {{ ansible_facts['distribution_version'] }}.
+    quiet: true
+
+- name: Refuse to manage hosts as root
+  ansible.builtin.assert:
+    that: common_allow_root or ansible_user | default('root') != 'root'
+    fail_msg: >-
+      Connected as root. Create the automation user first (bootstrap/user-data at
+      VM creation, or `make bootstrap BOOTSTRAP_USER=root`) and run as that user.
+    quiet: true
+
+- name: Install base packages
+  ansible.builtin.apt:
+    name: "{{ common_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: "{{ common_apt_cache_valid_time }}"
+
+- name: Gather package facts
+  ansible.builtin.package_facts:
+    manager: apt
+
+- name: Install systemd-timesyncd
+  ansible.builtin.apt:
+    name: systemd-timesyncd
+    state: present
+  when: "'chrony' not in ansible_facts['packages']"
+
+- name: Ensure time synchronisation service is running
+  ansible.builtin.systemd_service:
+    name: "{{ 'chrony' if 'chrony' in ansible_facts['packages'] else 'systemd-timesyncd' }}"
+    enabled: true
+    state: started
+
+# В sshd побеждает первое значение, поэтому 10-hardening.conf перекрывает 50-cloud-init.conf.
+- name: Harden sshd (key-only authentication, no root login)
+  ansible.builtin.template:
+    src: sshd-hardening.conf.j2
+    dest: /etc/ssh/sshd_config.d/10-hardening.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: /usr/sbin/sshd -t -f %s
+  notify: Reload sshd
+  when: common_ssh_hardening
+
+- name: Manage hostname
+  when: common_manage_hostname
+  block:
+    - name: Set hostname
+      ansible.builtin.hostname:
+        name: "{{ inventory_hostname }}"
+        use: systemd
+
+    - name: Resolve own hostname locally (avoids sudo/DNS delays)
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        regexp: '^127\.0\.1\.1\s'
+        line: "127.0.1.1 {{ inventory_hostname }}"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Prevent cloud-init from resetting the hostname on reboot
+      ansible.builtin.copy:
+        dest: /etc/cloud/cloud.cfg.d/99-preserve-hostname.cfg
+        content: |
+          preserve_hostname: true
+        owner: root
+        group: root
+        mode: "0644"
+      when: "'cloud-init' in ansible_facts['packages']"

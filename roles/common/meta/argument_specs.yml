@@ -1,0 +1,24 @@
+---
+argument_specs:
+  main:
+    short_description: Baseline for Debian 13 hosts
+    options:
+      common_packages:
+        type: list
+        elements: str
+        description: Packages installed from the official Debian repository.
+      common_apt_cache_valid_time:
+        type: int
+        description: Maximum age of the apt cache in seconds before it is refreshed.
+      common_manage_hostname:
+        type: bool
+        description: Set the hostname to inventory_hostname and keep it across reboots.
+      common_allow_root:
+        type: bool
+        description: Allow running the play as root (refused by default).
+      common_ssh_hardening:
+        type: bool
+        description: Install the sshd hardening drop-in.
+      common_sshd_options:
+        type: dict
+        description: sshd_config options written to the hardening drop-in.

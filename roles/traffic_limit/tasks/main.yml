@@ -1,0 +1,130 @@
+---
+- name: Validate rate values
+  ansible.builtin.assert:
+    that:
+      - traffic_limit_ingress_rate is match('^[0-9]+(bit|kbit|mbit|gbit)$')
+      - traffic_limit_egress_rate is match('^[0-9]+(bit|kbit|mbit|gbit)$')
+    fail_msg: Rates must be an integer with a tc bit-rate unit (bit, kbit, mbit, gbit), e.g. 10mbit.
+    quiet: true
+
+- name: Install iproute2 (tc) and jq (metrics export)
+  ansible.builtin.apt:
+    name: [iproute2, jq]
+    state: present
+
+- name: Load traffic control kernel modules and persist them across reboots
+  community.general.modprobe:
+    name: "{{ item }}"
+    state: present
+    persistent: present
+  loop: "{{ traffic_limit_kernel_modules }}"
+
+- name: Create tc-limit config directory
+  ansible.builtin.file:
+    path: "{{ traffic_limit_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Remove limits for interfaces that are no longer managed
+  ansible.builtin.import_tasks: cleanup.yml
+
+- name: Install tc-limit script
+  ansible.builtin.copy:
+    src: tc-limit
+    dest: "{{ traffic_limit_script_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Restart traffic limit
+
+- name: Render limit settings for the interface
+  ansible.builtin.template:
+    src: tc-limit.conf.j2
+    dest: "{{ traffic_limit_config_dir }}/{{ traffic_limit_interface }}.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart traffic limit
+
+- name: Install systemd template unit
+  ansible.builtin.template:
+    src: tc-limit@.service.j2
+    dest: /etc/systemd/system/tc-limit@.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart traffic limit
+
+- name: Apply changed settings
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start the unit for the interface
+  ansible.builtin.systemd_service:
+    name: "{{ traffic_limit_unit }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Read qdiscs installed on the interface
+  ansible.builtin.command:
+    argv: [tc, -json, qdisc, show, dev, "{{ traffic_limit_interface }}"]
+  register: traffic_limit_qdiscs
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Read ingress filters installed on the interface
+  ansible.builtin.command:
+    argv: [tc, -json, filter, show, dev, "{{ traffic_limit_interface }}", parent, "ffff:"]
+  register: traffic_limit_filters
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Re-apply rules that drifted from the desired state
+  ansible.builtin.systemd_service:
+    name: "{{ traffic_limit_unit }}"
+    state: restarted
+  when: >-
+    traffic_limit_qdiscs.rc != 0 or traffic_limit_filters.rc != 0
+    or not (traffic_limit_expected_qdiscs is subset(traffic_limit_qdiscs.stdout | from_json
+            | map(attribute='kind', default='') | list))
+    or 'matchall' not in (traffic_limit_filters.stdout | from_json
+            | map(attribute='kind', default='') | list)
+
+- name: Check for the node_exporter textfile collector directory
+  ansible.builtin.stat:
+    path: "{{ traffic_limit_textfile_directory }}"
+  register: traffic_limit_textfile_dir
+
+- name: Export metrics for node_exporter
+  when: traffic_limit_textfile_dir.stat.isdir | default(false)
+  block:
+    - name: Export configured limits as Prometheus metrics
+      ansible.builtin.template:
+        src: tc-limit.prom.j2
+        dest: "{{ traffic_limit_textfile_directory }}/tc_limit_{{ traffic_limit_interface }}.prom"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Install policer counter export units
+      ansible.builtin.template:
+        src: "{{ item }}.j2"
+        dest: "/etc/systemd/system/{{ item }}"
+        owner: root
+        group: root
+        mode: "0644"
+      loop:
+        - tc-limit-metrics@.service
+        - tc-limit-metrics@.timer
+      notify: Restart policer metrics timer
+
+    - name: Enable and start the policer counter export timer
+      ansible.builtin.systemd_service:
+        name: "{{ traffic_limit_metrics_timer }}"
+        enabled: true
+        state: started
+        daemon_reload: true

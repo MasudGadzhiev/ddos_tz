@@ -1,0 +1,32 @@
+---
+- name: Find tunnel definitions managed by this role
+  ansible.builtin.find:
+    paths:
+      - /etc/network/interfaces.d
+      - /etc/systemd/network
+    patterns: "{{ tunnel_file_prefix }}*"
+  register: tunnel_managed_files
+
+- name: Compute stale tunnel definitions
+  ansible.builtin.set_fact:
+    tunnel_stale_files: >-
+      {{ tunnel_managed_files.files | map(attribute='path')
+         | difference([tunnel_ifupdown_file] if tunnel_backend_resolved == 'ifupdown'
+                      else [tunnel_networkd_netdev_file, tunnel_networkd_network_file]
+                           + ([tunnel_networkd_fou_file] if tunnel_encap == 'fou' else [])) }}
+
+- name: Delete stale tunnel devices
+  ansible.builtin.command:
+    argv: [ip, link, delete, dev, "{{ item }}"]
+  loop: >-
+    {{ tunnel_stale_files | map('basename') | map('replace', tunnel_file_prefix, '')
+       | map('splitext') | map('first') | map('regex_replace', '-fou$', '') | unique }}
+  register: tunnel_stale_delete
+  changed_when: tunnel_stale_delete.rc == 0
+  failed_when: false
+
+- name: Remove stale tunnel definitions
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ tunnel_stale_files }}"

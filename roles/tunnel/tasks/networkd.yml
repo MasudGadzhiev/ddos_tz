@@ -1,0 +1,39 @@
+---
+- name: Render systemd-networkd FOU receive port
+  ansible.builtin.template:
+    src: networkd-fou.netdev.j2
+    dest: "{{ tunnel_networkd_fou_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: tunnel_encap == 'fou'
+  notify: Recreate tunnel device (networkd)
+
+- name: Render systemd-networkd netdev
+  ansible.builtin.template:
+    src: networkd.netdev.j2
+    dest: "{{ tunnel_networkd_netdev_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Recreate tunnel device (networkd)
+
+- name: Render systemd-networkd network
+  ansible.builtin.template:
+    src: networkd.network.j2
+    dest: "{{ tunnel_networkd_network_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd-networkd
+
+- name: Detect a missing or down tunnel interface
+  ansible.builtin.command:
+    argv: [ip, -json, link, show, dev, "{{ tunnel_name }}"]
+  register: tunnel_link_state
+  check_mode: false
+  failed_when: false
+  changed_when: >-
+    tunnel_link_state.rc != 0
+    or 'UP' not in (tunnel_link_state.stdout | from_json | first).get('flags', [])
+  notify: Recreate tunnel device (networkd)

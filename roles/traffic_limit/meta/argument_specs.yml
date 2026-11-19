@@ -1,0 +1,48 @@
+---
+argument_specs:
+  main:
+    short_description: Persistent tc policing and shaping for an interface
+    description:
+      - Ingress policing (tc police, matchall) and optional egress shaping (tbf),
+        applied by a systemd template unit bound to the network device.
+    options:
+      traffic_limit_interface:
+        type: str
+        description: Network device to limit.
+      traffic_limit_ingress_rate:
+        type: str
+        description: Policing rate, tc bit-rate units (e.g. 10mbit).
+      traffic_limit_ingress_burst:
+        type: str
+        description: Policer bucket size, tc size units (e.g. 125k).
+      traffic_limit_ingress_mtu:
+        type: str
+        description: Largest packet the policer accepts; must cover GRO packets.
+      traffic_limit_egress_enabled:
+        type: bool
+        description: Also shape egress traffic with tbf.
+      traffic_limit_egress_rate:
+        type: str
+        description: Shaping rate, tc bit-rate units.
+      traffic_limit_egress_burst:
+        type: str
+        description: tbf bucket size.
+      traffic_limit_egress_latency:
+        type: str
+        description: Maximum time a packet may wait in the tbf queue.
+      traffic_limit_kernel_modules:
+        type: list
+        elements: str
+        description: Kernel modules loaded at boot.
+      traffic_limit_textfile_directory:
+        type: path
+        description: node_exporter textfile collector directory for limit and policer metrics.
+      traffic_limit_metrics_interval:
+        type: str
+        description: How often the policer counters are exported (systemd time span).
+      traffic_limit_script_path:
+        type: path
+        description: Where the tc-limit script is installed.
+      traffic_limit_config_dir:
+        type: path
+        description: Directory with per-interface settings.

@@ -1,0 +1,4 @@
+---
+bootstrap_user: "{{ deploy_user | default('deploy') }}"
+bootstrap_ssh_public_keys: []
+bootstrap_sudo_nopasswd: true

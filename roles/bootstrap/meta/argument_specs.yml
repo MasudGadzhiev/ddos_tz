@@ -1,0 +1,16 @@
+---
+argument_specs:
+  main:
+    short_description: Non-root automation user with SSH key and sudo
+    options:
+      bootstrap_user:
+        type: str
+        description: Name of the automation user.
+      bootstrap_ssh_public_keys:
+        type: list
+        elements: str
+        required: true
+        description: Authoritative list of public keys allowed to log in.
+      bootstrap_sudo_nopasswd:
+        type: bool
+        description: Passwordless sudo (needed for non-interactive Ansible runs).

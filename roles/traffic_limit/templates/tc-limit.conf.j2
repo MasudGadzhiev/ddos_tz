@@ -1,0 +1,8 @@
+{{ ansible_managed | comment }}
+INGRESS_RATE={{ traffic_limit_ingress_rate | quote }}
+INGRESS_BURST={{ traffic_limit_ingress_burst | quote }}
+INGRESS_MTU={{ traffic_limit_ingress_mtu | quote }}
+EGRESS_ENABLED={{ 'yes' if traffic_limit_egress_enabled else 'no' }}
+EGRESS_RATE={{ traffic_limit_egress_rate | quote }}
+EGRESS_BURST={{ traffic_limit_egress_burst | quote }}
+EGRESS_LATENCY={{ traffic_limit_egress_latency | quote }}

@@ -1,0 +1,36 @@
+---
+tunnel_type: gre
+tunnel_name: "{{ tunnel_type }}1"
+# Рег.облако не пропускает GRE (47) и IPIP (4) между VM, поэтому GRE идёт внутри UDP (RFC 8086).
+tunnel_encap: fou
+tunnel_fou_port: 5555
+tunnel_underlay_interface: "{{ lan_interface }}"
+tunnel_network: 10.10.10.0/30
+tunnel_address: "{{ tunnel_ip }}/{{ tunnel_network.split('/') | last }}"
+tunnel_peer: "{{ groups['iperf_servers'] | difference([inventory_hostname]) | first }}"
+tunnel_local_ip: "{{ private_ip }}"
+tunnel_remote_ip: "{{ hostvars[tunnel_peer]['private_ip'] }}"
+tunnel_underlay_mtu: "{{ ansible_facts[lan_interface | replace('-', '_')]['mtu'] }}"
+
+traffic_limit_interface: "{{ tunnel_name }}"
+traffic_limit_ingress_rate: 10mbit
+traffic_limit_egress_rate: 10mbit
+
+node_exporter_listen_ip: "{{ private_ip }}"
+
+firewall_input_rules:
+  - comment: iperf3 (direct and through the tunnel)
+    proto: [tcp, udp]
+    dport: "{{ iperf_port }}"
+    sources:
+      - "{{ private_network_cidr }}"
+      - "{{ tunnel_network }}"
+  - comment: node_exporter (Prometheus on the monitoring host)
+    proto: tcp
+    dport: "{{ node_exporter_port }}"
+    sources: "{{ groups['monitoring'] | map('extract', hostvars, 'private_ip') | list }}"
+  - comment: "{{ tunnel_type | upper }}{{ '-in-UDP' if tunnel_encap == 'fou' else '' }} from the tunnel peer"
+    proto: "{{ 'udp' if tunnel_encap == 'fou' else {'gre': 47, 'ipip': 4}[tunnel_type] }}"
+    dport: "{{ tunnel_fou_port }}"
+    sources:
+      - "{{ tunnel_remote_ip }}"

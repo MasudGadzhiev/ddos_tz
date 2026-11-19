@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  author: Masud
+  description: Persistent tc policing (ingress) and shaping (egress) for an interface
+  license: proprietary
+  min_ansible_version: "2.18"
+  platforms:
+    - name: Debian
+      versions:
+        - trixie
+dependencies: []

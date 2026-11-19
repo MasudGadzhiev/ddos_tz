@@ -1,0 +1,9 @@
+{% macro bytes_per_second(rate) -%}
+{{ ((rate | regex_replace('[a-z]+$', '') | int) * traffic_limit_rate_units[rate | regex_replace('^[0-9]+', '')] / 8) | int }}
+{%- endmacro -%}
+# HELP tc_limit_rate_bytes_per_second Configured tc rate limit (from Ansible inventory).
+# TYPE tc_limit_rate_bytes_per_second gauge
+tc_limit_rate_bytes_per_second{device="{{ traffic_limit_interface }}",direction="ingress",action="police"} {{ bytes_per_second(traffic_limit_ingress_rate) }}
+{% if traffic_limit_egress_enabled %}
+tc_limit_rate_bytes_per_second{device="{{ traffic_limit_interface }}",direction="egress",action="shape"} {{ bytes_per_second(traffic_limit_egress_rate) }}
+{% endif %}

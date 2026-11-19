@@ -1,0 +1,25 @@
+{{ ansible_managed | comment }}
+[Unit]
+Description=Traffic limit on %i (tc police ingress, tbf egress)
+Documentation=man:tc(8) man:tc-police(8) man:tc-tbf(8)
+# Привязка к устройству: правила tc применяются заново при каждом появлении интерфейса (загрузка, ifup).
+BindsTo=sys-subsystem-net-devices-%i.device
+After=sys-subsystem-net-devices-%i.device
+ConditionPathExists={{ traffic_limit_config_dir }}/%i.conf
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=TC_LIMIT_CONFIG_DIR={{ traffic_limit_config_dir }}
+ExecStart={{ traffic_limit_script_path }} apply %i
+ExecReload={{ traffic_limit_script_path }} apply %i
+ExecStop={{ traffic_limit_script_path }} clear %i
+
+CapabilityBoundingSet=CAP_NET_ADMIN
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=sys-subsystem-net-devices-%i.device

@@ -1,0 +1,39 @@
+---
+- name: Baseline for all hosts
+  hosts: all
+  become: true
+  roles:
+    - role: common
+      tags: [common]
+
+- name: Tunnel, traffic policing, iperf3 and node_exporter
+  hosts: iperf_servers
+  become: true
+  pre_tasks:
+    - name: Assert the tunnel topology is point-to-point
+      ansible.builtin.assert:
+        that: groups['iperf_servers'] | length == 2
+        fail_msg: The iperf_servers group must contain exactly two hosts (tunnel peers).
+        quiet: true
+      run_once: true
+      tags: [always]
+  roles:
+    - role: firewall
+      tags: [firewall]
+    - role: node_exporter
+      tags: [node_exporter]
+    - role: tunnel
+      tags: [tunnel]
+    - role: traffic_limit
+      tags: [traffic_limit]
+    - role: iperf
+      tags: [iperf]
+
+- name: Monitoring stack - Prometheus and Grafana in Docker Compose
+  hosts: monitoring
+  become: true
+  roles:
+    - role: docker
+      tags: [docker]
+    - role: monitoring
+      tags: [monitoring]

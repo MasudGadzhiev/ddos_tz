@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  author: Masud
+  description: Prometheus node_exporter from the official Debian repository
+  license: proprietary
+  min_ansible_version: "2.18"
+  platforms:
+    - name: Debian
+      versions:
+        - trixie
+dependencies: []

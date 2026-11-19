@@ -1,0 +1,32 @@
+---
+argument_specs:
+  main:
+    short_description: Stateful nftables host firewall
+    options:
+      firewall_ssh_port:
+        type: int
+        description: SSH port, always allowed.
+      firewall_ssh_sources:
+        type: list
+        elements: str
+        description: CIDRs allowed to reach SSH; empty list means any source.
+      firewall_input_rules:
+        type: list
+        elements: dict
+        description: Additional inbound allow rules (comment, proto, dport, sources).
+        options:
+          comment:
+            type: str
+            required: true
+          proto:
+            type: raw
+            required: true
+            description: tcp, udp, a list of them, or an IP protocol number.
+          dport:
+            type: int
+          sources:
+            type: list
+            elements: str
+      firewall_config_path:
+        type: path
+        description: Ruleset loaded by nftables.service.

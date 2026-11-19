@@ -1,0 +1,64 @@
+---
+- name: Gather service facts (network stack detection)
+  ansible.builtin.service_facts:
+
+- name: Resolve the network configuration backend
+  ansible.builtin.set_fact:
+    tunnel_backend_resolved: >-
+      {{ tunnel_backend if tunnel_backend != 'auto'
+         else ('networkd'
+               if ansible_facts['services'].get('systemd-networkd.service', {}).get('state') == 'running'
+               else 'ifupdown') }}
+
+- name: Validate tunnel parameters
+  ansible.builtin.assert:
+    that:
+      - tunnel_local_ip in ansible_facts['all_ipv4_addresses']
+      - tunnel_remote_ip != tunnel_local_ip
+      - tunnel_address.split('/') | length == 2
+      - tunnel_mtu | int >= 576
+      - tunnel_backend_resolved == 'networkd' or 'networking.service' in ansible_facts['services']
+    fail_msg: >-
+      Invalid tunnel setup on {{ inventory_hostname }}: local={{ tunnel_local_ip }}
+      (must be configured on the host), remote={{ tunnel_remote_ip }},
+      address={{ tunnel_address }} (CIDR), mtu={{ tunnel_mtu }}, encap={{ tunnel_encap }},
+      backend={{ tunnel_backend_resolved }} (ifupdown requires networking.service).
+    quiet: true
+
+- name: Load the tunnel kernel modules and persist them across reboots
+  community.general.modprobe:
+    name: "{{ item }}"
+    state: present
+    persistent: present
+  loop: "{{ tunnel_kernel_modules }}"
+
+- name: Tune the underlay interface
+  ansible.builtin.import_tasks: underlay.yml
+
+- name: Remove tunnels left over from a previous configuration
+  ansible.builtin.import_tasks: cleanup.yml
+
+- name: Configure the tunnel with ifupdown
+  ansible.builtin.import_tasks: ifupdown.yml
+  when: tunnel_backend_resolved == 'ifupdown'
+
+- name: Configure the tunnel with systemd-networkd
+  ansible.builtin.import_tasks: networkd.yml
+  when: tunnel_backend_resolved == 'networkd'
+
+- name: Apply pending tunnel changes
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for the tunnel interface to come up with its address
+  ansible.builtin.command:
+    argv: [ip, -json, -4, address, show, dev, "{{ tunnel_name }}"]
+  register: tunnel_address_state
+  changed_when: false
+  check_mode: false
+  retries: 15
+  delay: 2
+  until: >-
+    tunnel_address_state.rc == 0
+    and tunnel_address.split('/') | first in (tunnel_address_state.stdout | from_json
+        | map(attribute='addr_info') | flatten | map(attribute='local') | list)
+  when: not ansible_check_mode

@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  author: Masud
+  description: iperf3 server from the official Debian repository (packaged systemd unit)
+  license: proprietary
+  min_ansible_version: "2.18"
+  platforms:
+    - name: Debian
+      versions:
+        - trixie
+dependencies: []

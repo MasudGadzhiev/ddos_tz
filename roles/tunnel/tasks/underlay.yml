@@ -1,0 +1,59 @@
+---
+- name: Install ethtool
+  ansible.builtin.apt:
+    name: ethtool
+    state: present
+  when: tunnel_underlay_disable_gro | bool
+
+- name: Install systemd template unit for underlay GRO
+  ansible.builtin.template:
+    src: tunnel-underlay-gro-off@.service.j2
+    dest: /etc/systemd/system/tunnel-underlay-gro-off@.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart underlay GRO unit
+  when: tunnel_underlay_disable_gro | bool
+
+- name: Apply pending underlay changes
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable GRO-off unit for the underlay interface
+  ansible.builtin.systemd_service:
+    name: "{{ tunnel_gro_unit }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: tunnel_underlay_disable_gro | bool
+
+- name: Read GRO state of the underlay interface
+  ansible.builtin.command:
+    argv: [ethtool, --show-features, "{{ tunnel_underlay_interface }}"]
+  register: tunnel_underlay_features
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: tunnel_underlay_disable_gro | bool
+
+- name: Turn GRO off again if it drifted
+  ansible.builtin.systemd_service:
+    name: "{{ tunnel_gro_unit }}"
+    state: restarted
+  when:
+    - tunnel_underlay_disable_gro | bool
+    - "'generic-receive-offload: on' in tunnel_underlay_features.stdout"
+
+- name: Check for a GRO-off unit from a previous configuration
+  ansible.builtin.stat:
+    path: /etc/systemd/system/tunnel-underlay-gro-off@.service
+  register: tunnel_gro_unit_file
+  when: not (tunnel_underlay_disable_gro | bool)
+
+- name: Restore GRO when it is no longer needed
+  ansible.builtin.systemd_service:
+    name: "{{ tunnel_gro_unit }}"
+    enabled: false
+    state: stopped
+  when:
+    - not (tunnel_underlay_disable_gro | bool)
+    - tunnel_gro_unit_file.stat.exists | default(false)

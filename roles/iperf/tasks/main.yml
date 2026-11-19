@@ -1,0 +1,47 @@
+---
+# Без ответа debconf postinst пакета отключает iperf3.service при каждом обновлении.
+- name: Preseed debconf to keep the packaged iperf3.service enabled
+  ansible.builtin.debconf:
+    name: iperf3
+    question: iperf3/start_daemon
+    value: "true"
+    vtype: boolean
+
+- name: Install iperf3
+  ansible.builtin.apt:
+    name: iperf3
+    state: present
+
+- name: Create systemd drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/iperf3.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install systemd drop-in (arguments and sandboxing)
+  ansible.builtin.template:
+    src: override.conf.j2
+    dest: /etc/systemd/system/iperf3.service.d/override.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart iperf3
+
+- name: Enable and start iperf3 server
+  ansible.builtin.systemd_service:
+    name: iperf3
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Apply pending restarts before the health check
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for iperf3 to accept connections
+  ansible.builtin.wait_for:
+    host: "{{ iperf_bind_address | default('127.0.0.1', true) }}"
+    port: "{{ iperf_port }}"
+    timeout: 30
+  when: not ansible_check_mode

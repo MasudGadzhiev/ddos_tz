@@ -1,0 +1,16 @@
+{{ ansible_managed | comment }}
+[NetDev]
+Name={{ tunnel_name }}
+Kind={{ tunnel_type }}
+MTUBytes={{ tunnel_mtu }}
+
+[Tunnel]
+Local={{ tunnel_local_ip }}
+Remote={{ tunnel_remote_ip }}
+TTL={{ tunnel_ttl }}
+Independent=yes
+{% if tunnel_encap == 'fou' %}
+FooOverUDP=yes
+FOUDestinationPort={{ tunnel_fou_port }}
+FOUSourcePort=0
+{% endif %}

@@ -1,0 +1,7 @@
+---
+firewall_ssh_port: 22
+firewall_ssh_sources: []
+
+firewall_input_rules: []
+
+firewall_config_path: /etc/nftables.conf

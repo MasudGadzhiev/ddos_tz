@@ -1,0 +1,56 @@
+---
+argument_specs:
+  main:
+    short_description: Persistent point-to-point GRE/IPIP tunnel
+    description:
+      - Creates a GRE or IPIP tunnel and persists it in the host's native network
+        stack (ifupdown or systemd-networkd), so it survives reboots.
+    options:
+      tunnel_type:
+        type: str
+        choices: [gre, ipip]
+        description: Encapsulation type.
+      tunnel_name:
+        type: str
+        description: Tunnel device name (default "<tunnel_type>1").
+      tunnel_local_ip:
+        type: str
+        required: true
+        description: Local underlay IPv4 address; must be configured on the host.
+      tunnel_remote_ip:
+        type: str
+        required: true
+        description: Underlay IPv4 address of the peer.
+      tunnel_address:
+        type: str
+        required: true
+        description: Inner IPv4 address in CIDR notation, e.g. 10.10.10.1/30.
+      tunnel_ttl:
+        type: int
+        description: TTL of outer packets.
+      tunnel_underlay_mtu:
+        type: int
+        description: MTU of the underlay interface, used to derive tunnel_mtu.
+      tunnel_mtu:
+        type: int
+        description: Tunnel MTU (default underlay MTU minus encapsulation overhead).
+      tunnel_overhead_bytes:
+        type: int
+        description: Encapsulation overhead in bytes (derived from type and encap).
+      tunnel_encap:
+        type: str
+        choices: [none, fou]
+        description: Native IP protocol 47/4, or the same packets inside UDP (Foo-over-UDP).
+      tunnel_fou_port:
+        type: int
+        description: UDP port for Foo-over-UDP encapsulation.
+      tunnel_underlay_interface:
+        type: str
+        description: Underlay NIC carrying the encapsulated packets.
+      tunnel_underlay_disable_gro:
+        type: bool
+        description: Turn GRO off on the underlay NIC (default for FOU encapsulation).
+      tunnel_backend:
+        type: str
+        choices: [auto, ifupdown, networkd]
+        description: Network stack that persists the configuration.

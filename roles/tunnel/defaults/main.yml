@@ -1,0 +1,19 @@
+---
+tunnel_type: gre
+tunnel_name: "{{ tunnel_type }}1"
+
+tunnel_encap: none
+tunnel_fou_port: 5555
+
+tunnel_underlay_interface: eth0
+# С включённым GRO на underlay (virtio) TCP внутри UDP-туннеля падает до единиц Мбит/с.
+tunnel_underlay_disable_gro: "{{ tunnel_encap == 'fou' }}"
+
+tunnel_ttl: 64
+
+tunnel_underlay_mtu: 1500
+tunnel_overhead_bytes: >-
+  {{ 20 + (8 if tunnel_encap == 'fou' else 0) + (4 if tunnel_type == 'gre' else 0) }}
+tunnel_mtu: "{{ (tunnel_underlay_mtu | int) - (tunnel_overhead_bytes | int) }}"
+
+tunnel_backend: auto

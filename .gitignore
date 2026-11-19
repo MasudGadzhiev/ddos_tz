@@ -1,0 +1,17 @@
+.credentials/
+
+collections/
+.venv/
+.ansible/
+.cache/
+
+*.retry
+*.pyc
+__pycache__/
+
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+inventory/hosts.yml

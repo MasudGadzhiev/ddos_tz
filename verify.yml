@@ -1,0 +1,123 @@
+---
+- name: Gather facts of all hosts (private addresses of the peers)
+  hosts: all
+  gather_facts: true
+  tasks: []
+
+- name: Verify the tunnel, traffic limit and iperf3 throughput
+  hosts: iperf_servers[0]
+  gather_facts: false
+  vars:
+    verify_duration: 15
+    verify_tunnel_min_mbit: 8.5
+    verify_tunnel_max_mbit: 10.5
+    verify_direct_min_ratio: 5
+    verify_peer_tunnel_ip: "{{ hostvars[tunnel_peer]['tunnel_ip'] }}"
+    verify_peer_private_ip: "{{ hostvars[tunnel_peer]['private_ip'] }}"
+  tasks:
+    - name: Ping the peer through the tunnel
+      ansible.builtin.command:
+        argv: [ping, -c, "3", -W, "2", "{{ verify_peer_tunnel_ip }}"]
+      changed_when: false
+
+    - name: Read tc statistics on the tunnel interface
+      ansible.builtin.command:
+        argv: [/usr/sbin/tc, -s, qdisc, show, dev, "{{ tunnel_name }}"]
+      register: verify_tc
+      changed_when: false
+
+    - name: Show tc statistics
+      ansible.builtin.debug:
+        var: verify_tc.stdout_lines
+
+    - name: Run iperf3 (TCP)
+      ansible.builtin.command:
+        argv: >-
+          {{ ['iperf3', '--client', item.target, '--time', verify_duration | string, '--json']
+             + (['--reverse'] if item.reverse else []) }}
+      loop:
+        - { name: tunnel, target: "{{ verify_peer_tunnel_ip }}", reverse: false }
+        - { name: tunnel_reverse, target: "{{ verify_peer_tunnel_ip }}", reverse: true }
+        - { name: direct, target: "{{ verify_peer_private_ip }}", reverse: false }
+      loop_control:
+        label: "{{ item.name }} -> {{ item.target }}{{ ' (reverse)' if item.reverse else '' }}"
+      register: verify_iperf
+      changed_when: false
+
+    - name: Collect throughput, Mbit/s
+      ansible.builtin.set_fact:
+        verify_mbit: >-
+          {{ verify_mbit | default({}) | combine({item.item.name:
+             ((item.stdout | from_json)['end']['sum_received']['bits_per_second'] / 1000000) | round(2)}) }}
+      loop: "{{ verify_iperf.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+
+    - name: Report
+      ansible.builtin.debug:
+        msg:
+          - "tunnel  {{ inventory_hostname }} -> {{ tunnel_peer }} ({{ verify_peer_tunnel_ip }}):  {{ verify_mbit.tunnel }} Mbit/s"
+          - "tunnel  {{ tunnel_peer }} -> {{ inventory_hostname }} (reverse):      {{ verify_mbit.tunnel_reverse }} Mbit/s"
+          - "direct  {{ inventory_hostname }} -> {{ tunnel_peer }} ({{ verify_peer_private_ip }}):  {{ verify_mbit.direct }} Mbit/s"
+
+    - name: Assert acceptance criteria
+      ansible.builtin.assert:
+        that:
+          - verify_mbit.tunnel | float >= verify_tunnel_min_mbit
+          - verify_mbit.tunnel | float <= verify_tunnel_max_mbit
+          - verify_mbit.tunnel_reverse | float >= verify_tunnel_min_mbit
+          - verify_mbit.tunnel_reverse | float <= verify_tunnel_max_mbit
+          - verify_mbit.direct | float >= verify_mbit.tunnel | float * verify_direct_min_ratio
+        fail_msg: "Throughput outside of the expected range: {{ verify_mbit }}"
+        success_msg: Tunnel is limited to ~10 Mbit/s in both directions, direct path is unlimited.
+
+- name: Verify Prometheus and Grafana
+  hosts: monitoring
+  gather_facts: false
+  vars:
+    verify_prometheus_url: http://127.0.0.1:9090
+    verify_grafana_url: http://127.0.0.1:3000
+  tasks:
+    - name: Query node_exporter targets in Prometheus
+      ansible.builtin.uri:
+        url: "{{ verify_prometheus_url }}/api/v1/query?query={{ 'up{job=\"node\"}' | urlencode }}"
+        return_content: true
+      register: verify_up
+
+    - name: Query tunnel traffic metrics in Prometheus
+      ansible.builtin.uri:
+        url: >-
+          {{ verify_prometheus_url }}/api/v1/query?query={{
+             'node_network_receive_bytes_total{job="node", device=~"(gre|ipip)[0-9]+"}' | urlencode }}
+        return_content: true
+      register: verify_tunnel_metrics
+
+    - name: Assert all nodes are scraped, including tunnel interfaces
+      ansible.builtin.assert:
+        that:
+          - verify_up.json.data.result | length == groups['iperf_servers'] | length
+          - verify_up.json.data.result | map(attribute='value') | map('last') | unique == ['1']
+          - verify_tunnel_metrics.json.data.result | length == groups['iperf_servers'] | length
+        fail_msg: "Unexpected scrape state: {{ verify_up.json.data.result }}"
+        quiet: true
+
+    - name: Check Grafana health
+      ansible.builtin.uri:
+        url: "{{ verify_grafana_url }}/api/health"
+
+    - name: Check the provisioned dashboard
+      ansible.builtin.uri:
+        url: "{{ verify_grafana_url }}/api/dashboards/uid/iperf-nodes"
+        url_username: admin
+        url_password: "{{ monitoring_grafana_admin_password }}"
+        force_basic_auth: true
+        return_content: true
+      register: verify_dashboard
+      no_log: true
+
+    - name: Report
+      ansible.builtin.debug:
+        msg:
+          - "Prometheus targets up: {{ verify_up.json.data.result | map(attribute='metric.instance') | join(', ') }}"
+          - "Grafana dashboard: {{ verify_dashboard.json.dashboard.title }}"
+          - "Open: make ui, then http://localhost:3000/d/iperf-nodes (user admin, password: make grafana-password)"

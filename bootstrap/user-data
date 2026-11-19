@@ -1,0 +1,12 @@
+#cloud-config
+users:
+  - name: deploy
+    gecos: Ansible automation
+    shell: /bin/bash
+    lock_passwd: true
+    sudo: "ALL=(ALL:ALL) NOPASSWD:ALL"
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAREPLACE_WITH_YOUR_PUBLIC_KEY operator@laptop
+
+disable_root: true
+ssh_pwauth: false

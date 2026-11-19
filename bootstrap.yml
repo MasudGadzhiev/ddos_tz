@@ -1,0 +1,42 @@
+---
+- name: Create the non-root automation user
+  hosts: all
+  gather_facts: false
+  become: "{{ ansible_user != 'root' }}"
+  vars:
+    bootstrap_ssh_public_key_file: "{{ lookup('ansible.builtin.env', 'HOME') }}/.ssh/id_ed25519.pub"
+    bootstrap_ssh_public_keys:
+      - "{{ lookup('ansible.builtin.file', bootstrap_ssh_public_key_file) }}"
+  pre_tasks:
+    - name: Wait for SSH on freshly created VMs
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: 22
+        search_regex: OpenSSH
+        timeout: 300
+      delegate_to: localhost
+      become: false
+
+    - name: Check whether the automation user can already log in and sudo
+      ansible.builtin.command:
+        argv:
+          - ssh
+          - -o
+          - BatchMode=yes
+          - -o
+          - ConnectTimeout=10
+          - -o
+          - StrictHostKeyChecking=accept-new
+          - "{{ deploy_user }}@{{ ansible_host }}"
+          - sudo -n true
+      delegate_to: localhost
+      become: false
+      register: bootstrap_probe
+      changed_when: false
+      failed_when: false
+
+    - name: Skip hosts that are already bootstrapped
+      ansible.builtin.meta: end_host
+      when: bootstrap_probe.rc == 0
+  roles:
+    - role: bootstrap

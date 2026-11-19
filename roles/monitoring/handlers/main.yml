@@ -1,0 +1,19 @@
+---
+- name: Reload Prometheus
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-directory
+      - "{{ monitoring_base_dir }}"
+      - kill
+      - --signal
+      - SIGHUP
+      - prometheus
+  changed_when: true
+
+- name: Restart Grafana
+  community.docker.docker_compose_v2:
+    project_src: "{{ monitoring_base_dir }}"
+    services: [grafana]
+    state: restarted

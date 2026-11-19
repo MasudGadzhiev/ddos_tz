@@ -1,0 +1,100 @@
+---
+- name: Create project directory layout
+  ansible.builtin.file:
+    path: "{{ monitoring_base_dir }}/{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - ""
+    - prometheus
+    - prometheus/rules
+    - grafana/provisioning/alerting
+    - grafana/provisioning/dashboards
+    - grafana/provisioning/datasources
+    - grafana/provisioning/plugins
+    - grafana/dashboards
+
+- name: Create secrets directory
+  ansible.builtin.file:
+    path: "{{ monitoring_base_dir }}/secrets"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Render Prometheus configuration
+  ansible.builtin.template:
+    src: prometheus.yml.j2
+    dest: "{{ monitoring_base_dir }}/prometheus/prometheus.yml"
+    owner: root
+    group: root
+    mode: "0644"
+    validate: "{{ monitoring_promtool }} check config /tmp/validate.yml"
+  notify: Reload Prometheus
+
+- name: Install Prometheus alerting rules
+  ansible.builtin.copy:
+    src: prometheus/rules/node.yml
+    dest: "{{ monitoring_base_dir }}/prometheus/rules/node.yml"
+    owner: root
+    group: root
+    mode: "0644"
+    validate: "{{ monitoring_promtool }} check rules /tmp/validate.yml"
+  notify: Reload Prometheus
+
+- name: Provision Grafana datasource
+  ansible.builtin.template:
+    src: grafana-datasource.yml.j2
+    dest: "{{ monitoring_base_dir }}/grafana/provisioning/datasources/prometheus.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Grafana
+
+- name: Provision Grafana dashboard provider
+  ansible.builtin.copy:
+    src: grafana/dashboard-provider.yml
+    dest: "{{ monitoring_base_dir }}/grafana/provisioning/dashboards/default.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Grafana
+
+- name: Install Grafana dashboards
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ monitoring_base_dir }}/grafana/dashboards/"
+    owner: root
+    group: root
+    mode: "0644"
+    validate: python3 -m json.tool %s
+  loop: "{{ query('ansible.builtin.fileglob', 'grafana/dashboards/*.json') }}"
+
+- name: Write Grafana admin password (Compose secret)
+  ansible.builtin.copy:
+    content: "{{ monitoring_grafana_admin_password }}"
+    dest: "{{ monitoring_base_dir }}/secrets/grafana_admin_password"
+    owner: "{{ monitoring_grafana_uid }}"
+    group: root
+    mode: "0400"
+  no_log: true
+
+- name: Render Compose file
+  ansible.builtin.template:
+    src: compose.yaml.j2
+    dest: "{{ monitoring_base_dir }}/compose.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+    validate: docker compose --project-directory {{ monitoring_base_dir }} --file %s config --quiet
+
+- name: Deploy Prometheus and Grafana
+  community.docker.docker_compose_v2:
+    project_src: "{{ monitoring_base_dir }}"
+    state: present
+    pull: missing
+    remove_orphans: true
+    wait: true
+    wait_timeout: 180

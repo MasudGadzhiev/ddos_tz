@@ -1,0 +1,25 @@
+---
+deploy_user: deploy
+ansible_user: "{{ deploy_user }}"
+ansible_ssh_common_args: -o StrictHostKeyChecking=accept-new
+
+private_ip: "{{ ansible_facts['default_ipv4']['address'] }}"
+
+lan_interface: >-
+  {{ ansible_facts['interfaces']
+     | map('replace', '-', '_')
+     | map('extract', ansible_facts)
+     | selectattr('ipv4', 'defined')
+     | selectattr('ipv4.address', 'equalto', private_ip)
+     | map(attribute='device')
+     | first
+     | default(ansible_facts['default_ipv4']['interface'], true) }}
+
+private_network_cidr: >-
+  {{ ansible_facts[lan_interface | replace('-', '_')]['ipv4']['network'] }}/{{
+     ansible_facts[lan_interface | replace('-', '_')]['ipv4']['prefix'] }}
+
+ansible_managed: Managed by Ansible - manual changes will be overwritten
+
+iperf_port: 5201
+node_exporter_port: 9100

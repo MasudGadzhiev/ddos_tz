@@ -1,0 +1,18 @@
+{{ ansible_managed | comment }}
+[Unit]
+Description=Export tc policer counters of %i for node_exporter
+After=tc-limit@%i.service
+ConditionPathExists=/sys/class/net/%i
+ConditionPathIsDirectory={{ traffic_limit_textfile_directory }}
+
+[Service]
+Type=oneshot
+Environment=TC_LIMIT_TEXTFILE_DIR={{ traffic_limit_textfile_directory }}
+ExecStart={{ traffic_limit_script_path }} metrics %i
+
+CapabilityBoundingSet=
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths={{ traffic_limit_textfile_directory }}
+ProtectHome=yes
+PrivateTmp=yes

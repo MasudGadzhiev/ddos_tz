@@ -1,0 +1,21 @@
+{{ ansible_managed | comment }}
+[Unit]
+Description=Disable GRO on %i (underlay of a UDP-encapsulated tunnel)
+Documentation=man:ethtool(8)
+BindsTo=sys-subsystem-net-devices-%i.device
+After=sys-subsystem-net-devices-%i.device
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/ethtool --features %i gro off
+ExecStop=/usr/sbin/ethtool --features %i gro on
+
+CapabilityBoundingSet=CAP_NET_ADMIN
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=sys-subsystem-net-devices-%i.device

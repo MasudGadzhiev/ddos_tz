@@ -1,0 +1,8 @@
+{{ ansible_managed | comment }}
+[NetDev]
+Name=fou-{{ tunnel_name }}
+Kind=fou
+
+[FooOverUDP]
+Port={{ tunnel_fou_port }}
+Protocol={{ tunnel_ip_protocols[tunnel_type] }}

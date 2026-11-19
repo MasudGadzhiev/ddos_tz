@@ -1,0 +1,22 @@
+---
+monitoring_project_name: monitoring
+monitoring_base_dir: /opt/monitoring
+
+monitoring_prometheus_image: prom/prometheus:v3.13.5@sha256:aafa9d694e6a883c02db516d9f6e5b84e14195f49a2a6456a4cca815edda72b9
+monitoring_grafana_image: grafana/grafana:13.3.1@sha256:0615ec4fbd4072004b7d86b46ded63013a74b7d6eb1119273dd89e8fa25c13cf
+
+monitoring_prometheus_bind_address: 127.0.0.1
+monitoring_prometheus_port: 9090
+monitoring_prometheus_retention_time: 15d
+monitoring_prometheus_retention_size: 5GB
+monitoring_scrape_interval: 5s
+monitoring_scrape_timeout: 4s
+monitoring_evaluation_interval: 15s
+monitoring_node_targets: {}
+
+monitoring_grafana_bind_address: 127.0.0.1
+monitoring_grafana_port: 3000
+monitoring_grafana_admin_user: admin
+
+monitoring_prometheus_memory_limit: 1g
+monitoring_grafana_memory_limit: 512m

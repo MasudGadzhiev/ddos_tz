@@ -1,0 +1,44 @@
+---
+- name: Find existing tc-limit configs
+  ansible.builtin.find:
+    paths: "{{ traffic_limit_config_dir }}"
+    patterns: "*.conf"
+  register: traffic_limit_existing_configs
+
+- name: Compute interfaces that are no longer limited
+  ansible.builtin.set_fact:
+    traffic_limit_stale_interfaces: >-
+      {{ traffic_limit_existing_configs.files | map(attribute='path') | map('basename')
+         | map('splitext') | map('first') | reject('equalto', traffic_limit_interface) | list }}
+
+- name: Stop and disable stale tc-limit units
+  ansible.builtin.systemd_service:
+    name: "tc-limit@{{ item }}.service"
+    enabled: false
+    state: stopped
+  loop: "{{ traffic_limit_stale_interfaces }}"
+
+- name: Check for the policer metrics timer unit
+  ansible.builtin.stat:
+    path: /etc/systemd/system/tc-limit-metrics@.timer
+  register: traffic_limit_metrics_unit_file
+
+- name: Stop and disable stale policer metrics timers
+  ansible.builtin.systemd_service:
+    name: "tc-limit-metrics@{{ item }}.timer"
+    enabled: false
+    state: stopped
+  loop: "{{ traffic_limit_stale_interfaces }}"
+  when: traffic_limit_metrics_unit_file.stat.exists
+
+- name: Remove stale tc-limit configs
+  ansible.builtin.file:
+    path: "{{ traffic_limit_config_dir }}/{{ item }}.conf"
+    state: absent
+  loop: "{{ traffic_limit_stale_interfaces }}"
+
+- name: Remove stale tc-limit metrics
+  ansible.builtin.file:
+    path: "{{ traffic_limit_textfile_directory }}/{{ item[0] }}{{ item[1] }}.prom"
+    state: absent
+  loop: "{{ ['tc_limit_', 'tc_limit_police_'] | product(traffic_limit_stale_interfaces) | list }}"

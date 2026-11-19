@@ -1,0 +1,57 @@
+---
+- name: Validate parameters
+  ansible.builtin.assert:
+    that:
+      - bootstrap_user != 'root'
+      - bootstrap_ssh_public_keys | length > 0
+    fail_msg: A non-root user name and at least one SSH public key are required.
+    quiet: true
+
+- name: Wait for cloud-init to finish first boot
+  ansible.builtin.command:
+    argv: [cloud-init, status, --wait]
+  register: bootstrap_cloud_init
+  changed_when: false
+  failed_when: bootstrap_cloud_init.rc not in [0, 2]
+  when: not ansible_check_mode
+
+- name: Install sudo
+  ansible.builtin.apt:
+    name: sudo
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create the automation user
+  ansible.builtin.user:
+    name: "{{ bootstrap_user }}"
+    comment: Ansible automation
+    shell: /bin/bash
+    create_home: true
+    password_lock: true
+  register: bootstrap_user_account
+
+- name: Create the .ssh directory
+  ansible.builtin.file:
+    path: "{{ bootstrap_user_account.home }}/.ssh"
+    state: directory
+    owner: "{{ bootstrap_user }}"
+    group: "{{ bootstrap_user }}"
+    mode: "0700"
+
+- name: Install authorized SSH keys
+  ansible.builtin.copy:
+    content: "{{ bootstrap_ssh_public_keys | join('\n') }}\n"
+    dest: "{{ bootstrap_user_account.home }}/.ssh/authorized_keys"
+    owner: "{{ bootstrap_user }}"
+    group: "{{ bootstrap_user }}"
+    mode: "0600"
+
+- name: Grant sudo to the automation user
+  ansible.builtin.copy:
+    content: "{{ bootstrap_user }} ALL=(ALL:ALL) {{ 'NOPASSWD: ' if bootstrap_sudo_nopasswd else '' }}ALL\n"
+    dest: "/etc/sudoers.d/90-{{ bootstrap_user }}"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: /usr/sbin/visudo -cf %s

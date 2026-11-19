@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+readonly CONFIG_DIR="${TC_LIMIT_CONFIG_DIR:-/etc/tc-limit}"
+readonly TEXTFILE_DIR="${TC_LIMIT_TEXTFILE_DIR:-/var/lib/prometheus/node-exporter}"
+readonly PROG="${0##*/}"
+
+log() { printf '%s: %s\n' "$PROG" "$*" >&2; }
+die() {
+    log "error: $*"
+    exit 1
+}
+
+usage() {
+    printf 'Usage: %s {apply|clear|status|metrics} <interface>\n' "$PROG" >&2
+    exit 2
+}
+
+load_config() {
+    local dev=$1
+    local cfg="${CONFIG_DIR}/${dev}.conf"
+
+    [[ -r "$cfg" ]] || die "config not found: $cfg"
+    # shellcheck source=/dev/null
+    . "$cfg"
+
+    : "${INGRESS_RATE:?INGRESS_RATE is not set in $cfg}"
+    : "${INGRESS_BURST:?INGRESS_BURST is not set in $cfg}"
+    : "${INGRESS_MTU:?INGRESS_MTU is not set in $cfg}"
+    EGRESS_ENABLED="${EGRESS_ENABLED:-no}"
+    if [[ "$EGRESS_ENABLED" == yes ]]; then
+        : "${EGRESS_RATE:?EGRESS_RATE is not set in $cfg}"
+        : "${EGRESS_BURST:?EGRESS_BURST is not set in $cfg}"
+        : "${EGRESS_LATENCY:?EGRESS_LATENCY is not set in $cfg}"
+    fi
+}
+
+clear_rules() {
+    local dev=$1
+    tc qdisc del dev "$dev" root 2>/dev/null || true
+    tc qdisc del dev "$dev" ingress 2>/dev/null || true
+}
+
+apply_rules() {
+    local dev=$1
+    local egress="off"
+
+    load_config "$dev"
+    ip link show dev "$dev" >/dev/null 2>&1 || die "interface $dev does not exist"
+
+    clear_rules "$dev"
+
+    if [[ "$EGRESS_ENABLED" == yes ]]; then
+        tc qdisc add dev "$dev" root handle 1: tbf \
+            rate "$EGRESS_RATE" burst "$EGRESS_BURST" latency "$EGRESS_LATENCY"
+        egress="tbf ${EGRESS_RATE}"
+    fi
+
+    tc qdisc add dev "$dev" handle ffff: ingress
+    tc filter add dev "$dev" parent ffff: protocol all prio 1 matchall \
+        action police rate "$INGRESS_RATE" burst "$INGRESS_BURST" mtu "$INGRESS_MTU" \
+        conform-exceed drop/ok
+
+    log "$dev: ingress police ${INGRESS_RATE} burst ${INGRESS_BURST}; egress ${egress}"
+}
+
+show_status() {
+    local dev=$1
+    tc -s qdisc show dev "$dev"
+    tc -s filter show dev "$dev" parent ffff:
+}
+
+write_metrics() {
+    local dev=$1
+    local out="${TEXTFILE_DIR}/tc_limit_police_${dev}.prom"
+    local stats tmp packets bytes drops overlimits
+
+    [[ -d "$TEXTFILE_DIR" ]] || die "textfile directory not found: $TEXTFILE_DIR"
+
+    if ! stats=$(tc -s -j filter show dev "$dev" parent ffff: | jq -er \
+        'first(.[] | .options.actions[]? | select(.kind == "police") | .stats)
+         | "\(.packets) \(.bytes) \(.drops) \(.overlimits)"'); then
+        rm -f "$out"
+        die "no police action on $dev"
+    fi
+    read -r packets bytes drops overlimits <<<"$stats"
+
+    tmp=$(mktemp "${TEXTFILE_DIR}/.tc_limit_police_${dev}.XXXXXX")
+    cat >"$tmp" <<EOF
+# HELP tc_limit_police_packets_total Packets seen by the ingress policer.
+# TYPE tc_limit_police_packets_total counter
+tc_limit_police_packets_total{device="${dev}"} ${packets}
+# HELP tc_limit_police_bytes_total Bytes seen by the ingress policer.
+# TYPE tc_limit_police_bytes_total counter
+tc_limit_police_bytes_total{device="${dev}"} ${bytes}
+# HELP tc_limit_police_drops_total Packets dropped by the ingress policer.
+# TYPE tc_limit_police_drops_total counter
+tc_limit_police_drops_total{device="${dev}"} ${drops}
+# HELP tc_limit_police_overlimits_total Packets that exceeded the policer rate.
+# TYPE tc_limit_police_overlimits_total counter
+tc_limit_police_overlimits_total{device="${dev}"} ${overlimits}
+EOF
+    chmod 0644 "$tmp"
+    mv -f "$tmp" "$out"
+}
+
+main() {
+    [[ $# -eq 2 ]] || usage
+    local action=$1 dev=$2
+
+    [[ "$dev" =~ ^[A-Za-z0-9_.-]{1,15}$ ]] || die "invalid interface name: $dev"
+
+    case "$action" in
+        apply) apply_rules "$dev" ;;
+        clear) clear_rules "$dev" ;;
+        status) show_status "$dev" ;;
+        metrics) write_metrics "$dev" ;;
+        *) usage ;;
+    esac
+}
+
+main "$@"

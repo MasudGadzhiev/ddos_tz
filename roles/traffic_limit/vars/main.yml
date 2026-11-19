@@ -1,0 +1,11 @@
+---
+traffic_limit_unit: "tc-limit@{{ traffic_limit_interface }}.service"
+traffic_limit_metrics_timer: "tc-limit-metrics@{{ traffic_limit_interface }}.timer"
+
+traffic_limit_rate_units:
+  bit: 1
+  kbit: 1000
+  mbit: 1000000
+  gbit: 1000000000
+
+traffic_limit_expected_qdiscs: "{{ ['ingress'] + (['tbf'] if traffic_limit_egress_enabled else []) }}"

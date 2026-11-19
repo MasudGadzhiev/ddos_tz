@@ -1,0 +1,43 @@
+#!/usr/sbin/nft -f
+{{ ansible_managed | comment }}
+
+table inet host_firewall
+delete table inet host_firewall
+
+{% macro sources(rule) -%}
+{% if rule.sources | default([]) | length > 0 %}ip saddr { {{ rule.sources | join(', ') }} } {% endif %}
+{%- endmacro %}
+{% macro match(rule) -%}
+{% if rule.proto is string and rule.proto in ['tcp', 'udp'] -%}
+{{ rule.proto }} dport {{ rule.dport }}
+{%- elif rule.proto is not string and rule.proto is iterable -%}
+meta l4proto { {{ rule.proto | join(', ') }} } th dport {{ rule.dport }}
+{%- else -%}
+ip protocol {{ rule.proto }}
+{%- endif %}
+{%- endmacro %}
+table inet host_firewall {
+    chain input {
+        type filter hook input priority filter; policy drop;
+
+        iif "lo" accept comment "loopback"
+        ct state vmap { established : accept, related : accept, invalid : drop }
+
+        meta l4proto icmp accept comment "ICMPv4"
+        meta l4proto ipv6-icmp accept comment "ICMPv6 (ND, PMTUD)"
+        udp sport 67 udp dport 68 accept comment "DHCPv4 replies"
+
+        {% if firewall_ssh_sources | length > 0 %}ip saddr { {{ firewall_ssh_sources | join(', ') }} } {% endif %}tcp dport {{ firewall_ssh_port }} accept comment "SSH"
+{% for rule in firewall_input_rules %}
+        {{ sources(rule) }}{{ match(rule) }} accept comment "{{ rule.comment }}"
+{% endfor %}
+    }
+
+    chain forward {
+        type filter hook forward priority filter; policy drop;
+    }
+
+    chain output {
+        type filter hook output priority filter; policy accept;
+    }
+}

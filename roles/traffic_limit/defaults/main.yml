@@ -1,0 +1,24 @@
+---
+traffic_limit_interface: gre1
+
+traffic_limit_ingress_rate: 10mbit
+# mtu должен покрывать GRO-пакеты (до 64 КиБ), а burst быть не меньше mtu, иначе policer отбрасывает крупные пакеты.
+traffic_limit_ingress_burst: 125k
+traffic_limit_ingress_mtu: 64k
+
+traffic_limit_egress_enabled: true
+traffic_limit_egress_rate: "{{ traffic_limit_ingress_rate }}"
+traffic_limit_egress_burst: 32k
+traffic_limit_egress_latency: 50ms
+
+traffic_limit_kernel_modules:
+  - sch_ingress
+  - sch_tbf
+  - cls_matchall
+  - act_police
+
+traffic_limit_textfile_directory: /var/lib/prometheus/node-exporter
+traffic_limit_metrics_interval: 15s
+
+traffic_limit_script_path: /usr/local/sbin/tc-limit
+traffic_limit_config_dir: /etc/tc-limit

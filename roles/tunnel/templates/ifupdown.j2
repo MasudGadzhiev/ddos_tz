@@ -1,0 +1,14 @@
+{{ ansible_managed | comment }}
+auto {{ tunnel_name }}
+iface {{ tunnel_name }} inet static
+    address {{ tunnel_address }}
+    mtu {{ tunnel_mtu }}
+{% if tunnel_encap == 'fou' %}
+    pre-up ip fou add port {{ tunnel_fou_port }} ipproto {{ tunnel_ip_protocols[tunnel_type] }}
+{% endif %}
+    pre-up ip link add {{ tunnel_name }} type {{ tunnel_type }} local {{ tunnel_local_ip }} remote {{ tunnel_remote_ip }} ttl {{ tunnel_ttl }}{% if tunnel_encap == 'fou' %} encap fou encap-sport auto encap-dport {{ tunnel_fou_port }}{% endif %}
+
+    post-down ip link del {{ tunnel_name }}
+{% if tunnel_encap == 'fou' %}
+    post-down ip fou del port {{ tunnel_fou_port }}
+{% endif %}

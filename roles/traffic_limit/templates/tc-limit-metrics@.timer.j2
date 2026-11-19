@@ -1,0 +1,11 @@
+{{ ansible_managed | comment }}
+[Unit]
+Description=Export tc policer counters of %i every {{ traffic_limit_metrics_interval }}
+
+[Timer]
+OnActiveSec=5s
+OnUnitActiveSec={{ traffic_limit_metrics_interval }}
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

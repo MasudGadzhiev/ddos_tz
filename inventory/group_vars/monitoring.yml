@@ -1,0 +1,11 @@
+---
+monitoring_node_targets: >-
+  {{ dict(groups['iperf_servers']
+          | zip(groups['iperf_servers']
+                | map('extract', hostvars, 'private_ip')
+                | map('regex_replace', '$', ':' ~ node_exporter_port))) }}
+
+monitoring_grafana_admin_password: >-
+  {{ lookup('ansible.builtin.password',
+            inventory_dir ~ '/../.credentials/grafana_admin_password',
+            length=24, chars=['ascii_letters', 'digits']) }}

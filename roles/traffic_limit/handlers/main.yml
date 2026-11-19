@@ -1,0 +1,12 @@
+---
+- name: Restart traffic limit
+  ansible.builtin.systemd_service:
+    name: "{{ traffic_limit_unit }}"
+    state: restarted
+    daemon_reload: true
+
+- name: Restart policer metrics timer
+  ansible.builtin.systemd_service:
+    name: "{{ traffic_limit_metrics_timer }}"
+    state: restarted
+    daemon_reload: true

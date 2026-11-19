@@ -1,0 +1,15 @@
+---
+argument_specs:
+  main:
+    short_description: iperf3 server as a systemd service
+    options:
+      iperf_port:
+        type: int
+        description: TCP/UDP port of the iperf3 server.
+      iperf_bind_address:
+        type: str
+        description: Address to bind to; empty means all addresses.
+      iperf_extra_args:
+        type: list
+        elements: str
+        description: Extra arguments for iperf3 --server.

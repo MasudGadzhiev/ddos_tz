@@ -1,0 +1,29 @@
+---
+common_packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - iproute2
+  - iputils-ping
+  - tcpdump
+  - jq
+
+common_apt_cache_valid_time: 3600
+
+common_manage_hostname: true
+
+common_allow_root: false
+
+common_ssh_hardening: true
+common_sshd_options:
+  PermitRootLogin: "no"
+  PasswordAuthentication: "no"
+  KbdInteractiveAuthentication: "no"
+  PermitEmptyPasswords: "no"
+  PubkeyAuthentication: "yes"
+  X11Forwarding: "no"
+  AllowAgentForwarding: "no"
+  MaxAuthTries: 3
+  LoginGraceTime: 30
+  ClientAliveInterval: 300
+  ClientAliveCountMax: 2

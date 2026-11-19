@@ -1,0 +1,15 @@
+---
+tunnel_ip_protocols:
+  gre: 47
+  ipip: 4
+tunnel_kernel_modules: >-
+  {{ [{'gre': 'ip_gre', 'ipip': 'ipip'}[tunnel_type]]
+     + (['fou'] if tunnel_encap == 'fou' else []) }}
+
+tunnel_file_prefix: 60-tunnel-
+tunnel_ifupdown_file: "/etc/network/interfaces.d/{{ tunnel_file_prefix }}{{ tunnel_name }}"
+tunnel_networkd_netdev_file: "/etc/systemd/network/{{ tunnel_file_prefix }}{{ tunnel_name }}.netdev"
+tunnel_networkd_network_file: "/etc/systemd/network/{{ tunnel_file_prefix }}{{ tunnel_name }}.network"
+tunnel_networkd_fou_file: "/etc/systemd/network/{{ tunnel_file_prefix }}{{ tunnel_name }}-fou.netdev"
+
+tunnel_gro_unit: "tunnel-underlay-gro-off@{{ tunnel_underlay_interface }}.service"

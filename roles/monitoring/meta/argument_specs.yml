@@ -1,0 +1,66 @@
+---
+argument_specs:
+  main:
+    short_description: Prometheus and Grafana in Docker Compose
+    description:
+      - Deploys a Compose project with Prometheus (config and rules validated by
+        promtool) and Grafana (datasource and dashboards provisioned from files).
+      - Requires Docker Engine with the Compose plugin (role docker).
+    options:
+      monitoring_project_name:
+        type: str
+        description: Compose project name.
+      monitoring_base_dir:
+        type: path
+        description: Directory with the Compose project and configs.
+      monitoring_prometheus_image:
+        type: str
+        description: Prometheus image, pinned by tag and digest.
+      monitoring_grafana_image:
+        type: str
+        description: Grafana image, pinned by tag and digest.
+      monitoring_prometheus_bind_address:
+        type: str
+        description: Host address the Prometheus port is published on.
+      monitoring_prometheus_port:
+        type: int
+        description: Host port for Prometheus.
+      monitoring_prometheus_retention_time:
+        type: str
+        description: TSDB retention by time.
+      monitoring_prometheus_retention_size:
+        type: str
+        description: TSDB retention by size.
+      monitoring_scrape_interval:
+        type: str
+        description: Global scrape interval (also Grafana timeInterval).
+      monitoring_scrape_timeout:
+        type: str
+        description: Scrape timeout, must not exceed the interval.
+      monitoring_evaluation_interval:
+        type: str
+        description: Rule evaluation interval.
+      monitoring_node_targets:
+        type: dict
+        required: true
+        description: Mapping instance name -> "address:port" of node_exporter.
+      monitoring_grafana_bind_address:
+        type: str
+        description: Host address the Grafana port is published on.
+      monitoring_grafana_port:
+        type: int
+        description: Host port for Grafana.
+      monitoring_grafana_admin_user:
+        type: str
+        description: Grafana admin login.
+      monitoring_grafana_admin_password:
+        type: str
+        required: true
+        no_log: true
+        description: Grafana admin password (applied on first start only).
+      monitoring_prometheus_memory_limit:
+        type: str
+        description: Memory limit of the Prometheus container.
+      monitoring_grafana_memory_limit:
+        type: str
+        description: Memory limit of the Grafana container.

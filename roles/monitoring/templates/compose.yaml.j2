@@ -1,0 +1,77 @@
+{{ ansible_managed | comment }}
+name: {{ monitoring_project_name }}
+
+x-hardening: &hardening
+  restart: unless-stopped
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+
+services:
+  prometheus:
+    <<: *hardening
+    image: {{ monitoring_prometheus_image }}
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time={{ monitoring_prometheus_retention_time }}
+      - --storage.tsdb.retention.size={{ monitoring_prometheus_retention_size }}
+    volumes:
+      - ./prometheus:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "{{ monitoring_prometheus_bind_address }}:{{ monitoring_prometheus_port }}:9090"
+    read_only: true
+    mem_limit: {{ monitoring_prometheus_memory_limit }}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9090/-/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks: [monitoring]
+
+  grafana:
+    <<: *hardening
+    image: {{ monitoring_grafana_image }}
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    environment:
+      GF_SECURITY_ADMIN_USER: {{ monitoring_grafana_admin_user }}
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/iperf-nodes.json
+    secrets:
+      - grafana_admin_password
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "{{ monitoring_grafana_bind_address }}:{{ monitoring_grafana_port }}:3000"
+    mem_limit: {{ monitoring_grafana_memory_limit }}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks: [monitoring]
+
+networks:
+  monitoring: {}
+
+volumes:
+  prometheus-data: {}
+  grafana-data: {}
+
+secrets:
+  grafana_admin_password:
+    file: ./secrets/grafana_admin_password

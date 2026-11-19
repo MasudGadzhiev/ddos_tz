@@ -1,0 +1,6 @@
+---
+monitoring_grafana_uid: 472
+
+monitoring_promtool: >-
+  docker run --rm --network none --user 0 --entrypoint promtool
+  --volume %s:/tmp/validate.yml:ro {{ monitoring_prometheus_image }}

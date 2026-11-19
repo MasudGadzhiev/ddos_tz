@@ -1,0 +1,4 @@
+{{ ansible_managed | comment }}
+{% for option, value in common_sshd_options | dictsort %}
+{{ option }} {{ value }}
+{% endfor %}

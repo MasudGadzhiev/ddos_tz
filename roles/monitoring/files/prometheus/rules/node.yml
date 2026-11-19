@@ -1,0 +1,53 @@
+---
+groups:
+  - name: node
+    rules:
+      - alert: NodeExporterDown
+        expr: up{job="node"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "node_exporter on {{ $labels.instance }} is unreachable"
+
+      - alert: HostHighCpuUsage
+        expr: 1 - avg by (instance) (rate(node_cpu_seconds_total{job="node", mode="idle"}[2m])) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CPU usage on {{ $labels.instance }} is {{ $value | humanizePercentage }}"
+
+      - alert: HostLowMemory
+        expr: node_memory_MemAvailable_bytes{job="node"} / node_memory_MemTotal_bytes{job="node"} < 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Less than 10% memory available on {{ $labels.instance }}"
+
+  - name: tunnel
+    rules:
+      - alert: TunnelInterfaceDown
+        expr: node_network_flags{job="node", device=~"(gre|ipip)[0-9]+"} % 2 == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Tunnel {{ $labels.device }} on {{ $labels.instance }} is administratively down"
+
+      - alert: TunnelInterfaceMissing
+        expr: up{job="node"} == 1 unless on (instance) node_network_info{device=~"(gre|ipip)[0-9]+"}
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No tunnel interface on {{ $labels.instance }}"
+
+      - alert: TunnelPolicerDropping
+        expr: rate(tc_limit_police_drops_total{job="node", device=~"(gre|ipip)[0-9]+"}[5m]) > 0
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "Ingress policer on {{ $labels.instance }}/{{ $labels.device }} drops {{ $value | humanize }} pkt/s"

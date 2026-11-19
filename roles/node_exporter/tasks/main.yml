@@ -1,0 +1,49 @@
+---
+- name: Install node_exporter
+  ansible.builtin.apt:
+    name: "{{ node_exporter_package }}"
+    state: present
+    install_recommends: false
+
+- name: Configure node_exporter command-line arguments
+  ansible.builtin.template:
+    src: prometheus-node-exporter.default.j2
+    dest: "/etc/default/{{ node_exporter_service }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart node_exporter
+
+- name: Create systemd drop-in directory
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ node_exporter_service }}.service.d"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install systemd drop-in (start after network is online)
+  ansible.builtin.template:
+    src: override.conf.j2
+    dest: "/etc/systemd/system/{{ node_exporter_service }}.service.d/override.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart node_exporter
+
+- name: Enable and start node_exporter
+  ansible.builtin.systemd_service:
+    name: "{{ node_exporter_service }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Apply pending restarts before the health check
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for node_exporter to accept connections
+  ansible.builtin.wait_for:
+    host: "{{ node_exporter_listen_ip }}"
+    port: "{{ node_exporter_port }}"
+    timeout: 30
+  when: not ansible_check_mode

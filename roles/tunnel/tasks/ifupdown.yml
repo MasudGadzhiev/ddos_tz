@@ -1,0 +1,30 @@
+---
+- name: Ensure ifupdown reads /etc/network/interfaces.d
+  ansible.builtin.lineinfile:
+    path: /etc/network/interfaces
+    regexp: '^\s*source(-directory)?\s+/etc/network/interfaces\.d'
+    line: source /etc/network/interfaces.d/*
+    insertbefore: BOF
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Render ifupdown tunnel definition
+  ansible.builtin.template:
+    src: ifupdown.j2
+    dest: "{{ tunnel_ifupdown_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Recreate tunnel interface (ifupdown)
+
+- name: Detect a missing or down tunnel interface
+  ansible.builtin.command:
+    argv: [ip, -json, link, show, dev, "{{ tunnel_name }}"]
+  register: tunnel_link_state
+  check_mode: false
+  failed_when: false
+  changed_when: >-
+    tunnel_link_state.rc != 0
+    or 'UP' not in (tunnel_link_state.stdout | from_json | first).get('flags', [])
+  notify: Recreate tunnel interface (ifupdown)
