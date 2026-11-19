@@ -13,8 +13,8 @@
   ansible.builtin.assert:
     that: common_allow_root or ansible_user | default('root') != 'root'
     fail_msg: >-
-      Connected as root. Create the automation user first (bootstrap/user-data at
-      VM creation, or `make bootstrap BOOTSTRAP_USER=root`) and run as that user.
+      Connected as root. Create the automation user first (make bootstrap)
+      and run as that user.
     quiet: true
 
 - name: Install base packages
